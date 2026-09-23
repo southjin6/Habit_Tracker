@@ -1,0 +1,4 @@
+# Store text as LF in the repository and let each clone check out with its own core.autocrlf.
+# Without this, line endings are decided per machine, so a commit from a Windows box can rewrite
+# every line a collaborator later touches.
+* text=auto
