@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The App project is WinExe/net8.0-windows, so anything testing its view models has to be a
+       Windows-targeted WPF project too. This exists because HabitTracker.Tests is plain net8.0 and
+       can only see Core: every rule that lives in the WPF project — the status banner semantics,
+       "a task is never red", and the amber-versus-red brush values — was previously provable only by
+       driving the running app by hand. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HabitTracker.App\HabitTracker.App.csproj" />
+    <ProjectReference Include="..\HabitTracker.Core\HabitTracker.Core.csproj" />
+  </ItemGroup>
+
+</Project>

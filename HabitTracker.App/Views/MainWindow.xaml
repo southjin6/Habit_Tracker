@@ -1,0 +1,409 @@
+<Window x:Class="HabitTracker.App.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:HabitTracker.App.ViewModels"
+        Title="Habit Tracker"
+        Height="700" Width="1100"
+        WindowStartupLocation="CenterScreen"
+        Background="{StaticResource WindowBgBrush}"
+        TextElement.Foreground="{StaticResource TextPrimaryBrush}">
+
+    <Window.Resources>
+        <!-- A card: dark surface with a hairline edge. Shadows do not read on a dark background,
+             so the outline does the separation work here. -->
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Margin" Value="0,0,0,10" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- ==================== TOP BAR ==================== -->
+        <Grid Margin="20,16,20,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="Habit Tracker" FontSize="20" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" />
+                <TextBlock Text="{Binding TodayText}" FontSize="12" Foreground="{StaticResource TextMutedBrush}"
+                           Margin="12,0,0,0" VerticalAlignment="Center" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <Grid Width="240">
+                    <TextBox x:Name="SearchBox" Style="{StaticResource FlatTextBox}"
+                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                             ToolTip="Filter both columns by name" />
+                    <TextBlock Text="Search" FontSize="13" Foreground="{StaticResource PlaceholderBrush}" Margin="10,0,0,0"
+                               VerticalAlignment="Center" IsHitTestVisible="False">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding Text, ElementName=SearchBox}" Value="" />
+                                            <Condition Binding="{Binding IsKeyboardFocused, ElementName=SearchBox}" Value="False" />
+                                        </MultiDataTrigger.Conditions>
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </MultiDataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Grid>
+                <Button Style="{StaticResource PillButton}" Content="Refresh" Margin="8,0,0,0"
+                        Command="{Binding RefreshCommand}" ToolTip="Re-read everything from MySQL" />
+            </StackPanel>
+        </Grid>
+
+        <!-- ==================== COLUMNS ==================== -->
+        <Grid Grid.Row="1" Margin="20,0,20,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="16" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- ==================== DAILIES ==================== -->
+            <Border Grid.Column="0" Background="{StaticResource ColumnBgBrush}" Padding="10,12">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Margin="2,0,2,12">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="Dailies" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" />
+                            <Border Background="{StaticResource AccentBrush}" CornerRadius="9" Padding="7,2" Margin="8,0,0,0"
+                                    VerticalAlignment="Center" ToolTip="Items shown by the current tab">
+                                <TextBlock Text="{Binding Dailies.Count}" Foreground="White" FontSize="11" FontWeight="Bold" />
+                            </Border>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <RadioButton Style="{StaticResource ColumnTab}" GroupName="DailyTabs" Content="All"
+                                         IsChecked="{Binding DailyFilter, Converter={StaticResource EnumMatch}, ConverterParameter=All}" />
+                            <RadioButton Style="{StaticResource ColumnTab}" GroupName="DailyTabs" Content="Due" Margin="14,0,0,0"
+                                         IsChecked="{Binding DailyFilter, Converter={StaticResource EnumMatch}, ConverterParameter=Due}" />
+                            <RadioButton Style="{StaticResource ColumnTab}" GroupName="DailyTabs" Content="Not Due" Margin="14,0,0,0"
+                                         IsChecked="{Binding DailyFilter, Converter={StaticResource EnumMatch}, ConverterParameter=NotDue}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Grid.Row="1" Margin="0,0,0,12">
+                        <TextBox x:Name="DailyAddBox" Style="{StaticResource FlatTextBox}"
+                                 Background="{StaticResource AddBarBgBrush}" BorderThickness="0"
+                                 Text="{Binding NewDailyName, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="Name of the new daily habit — press Enter to add">
+                            <TextBox.InputBindings>
+                                <KeyBinding Key="Enter" Command="{Binding AddDailyCommand}" />
+                            </TextBox.InputBindings>
+                        </TextBox>
+                        <TextBlock Text="Add a Daily" FontSize="13" Foreground="{StaticResource PlaceholderBrush}" Margin="10,0,0,0"
+                                   VerticalAlignment="Center" IsHitTestVisible="False">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding Text, ElementName=DailyAddBox}" Value="" />
+                                                <Condition Binding="{Binding IsKeyboardFocused, ElementName=DailyAddBox}" Value="False" />
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </MultiDataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+
+                    <Grid Grid.Row="2">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding Dailies}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:ItemViewModel}">
+                                        <Border Style="{StaticResource Card}"
+                                                Background="{Binding Flag, Converter={StaticResource FlagToBackgroundBrush}}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="46" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <Button Style="{StaticResource ActionSquare}"
+                                                        Command="{Binding ToggleDoneCommand}"
+                                                        ToolTip="{Binding CheckboxToolTip}">
+                                                    <Button.Background>
+                                                        <MultiBinding Converter="{StaticResource ActionSquareBrush}">
+                                                            <Binding Path="Flag" />
+                                                            <Binding Path="IsDone" />
+                                                            <Binding Path="IsDaily" />
+                                                        </MultiBinding>
+                                                    </Button.Background>
+                                                    <Grid>
+                                                        <Border Width="18" Height="18" CornerRadius="3" Background="#66FFFFFF">
+                                                            <Border.Style>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Border.Style>
+                                                        </Border>
+                                                        <Path Data="M2,7.5 L6,11.5 L14,2.5" Stroke="White" StrokeThickness="2.4"
+                                                              StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                                              Stretch="Uniform" Width="15" Height="13">
+                                                            <Path.Style>
+                                                                <Style TargetType="Path">
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                            <Setter Property="Visibility" Value="Visible" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Path.Style>
+                                                        </Path>
+                                                    </Grid>
+                                                </Button>
+
+                                                <StackPanel Grid.Column="1" Margin="10,9,6,9" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" Style="{StaticResource CardTitle}" />
+                                                    <TextBlock Text="{Binding StatusText}" Style="{StaticResource CardSubtitle}"
+                                                               Foreground="{Binding Flag, Converter={StaticResource FlagToAccentBrush}}" />
+                                                </StackPanel>
+
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal"
+                                                            VerticalAlignment="Center" Margin="0,0,8,0">
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,6,0"
+                                                                ToolTip="Current streak, derived from completion history">
+                                                        <Path Data="M0,0 L4.5,4.5 L0,9 Z M5.5,0 L10,4.5 L5.5,9 Z"
+                                                              Width="10" Height="9" Stretch="Uniform" VerticalAlignment="Center"
+                                                              Fill="{Binding Flag, Converter={StaticResource FlagToAccentBrush}}" />
+                                                        <TextBlock Text="{Binding Streak}" FontSize="13" FontWeight="Bold"
+                                                                   Margin="4,0,0,0" VerticalAlignment="Center"
+                                                                   Foreground="{Binding Flag, Converter={StaticResource FlagToAccentBrush}}" />
+                                                    </StackPanel>
+                                                    <Button Style="{StaticResource GhostIconButton}"
+                                                            Command="{Binding OpenHistoryCommand}"
+                                                            ToolTip="Backdate or remove a completion">
+                                                        <Path Data="M1.5,3.5 H14.5 V13.5 H1.5 Z M1.5,6.5 H14.5 M4.5,1.5 V4.5 M11.5,1.5 V4.5"
+                                                              Width="14" Height="14" Stretch="Uniform"
+                                                              Stroke="{StaticResource IconStrokeBrush}" StrokeThickness="1.4" Fill="Transparent" StrokeLineJoin="Round" />
+                                                    </Button>
+                                                    <Button Style="{StaticResource GhostIconButton}" Margin="2,0,0,0"
+                                                            Command="{Binding DeleteCommand}"
+                                                            ToolTip="Delete this daily and its whole history">
+                                                        <Path Data="M3,3 L11,11 M11,3 L3,11"
+                                                              Width="12" Height="12" Stretch="Uniform"
+                                                              Stroke="{StaticResource IconStrokeBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                                    </Button>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <StackPanel VerticalAlignment="Center" Margin="0,20,0,0">
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Dailies.Count}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <Path Style="{StaticResource EmptyIcon}"
+                                  Data="M1.5,3.5 H14.5 V13.5 H1.5 Z M1.5,6.5 H14.5 M4.5,1.5 V4.5 M11.5,1.5 V4.5" />
+                            <TextBlock Text="These are your Dailies" Style="{StaticResource EmptyTitle}" />
+                            <TextBlock Style="{StaticResource EmptyBody}"
+                                       Text="Dailies repeat every day and carry a streak. Miss one day and the streak breaks; miss two in a row and only that card turns red." />
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </Border>
+
+            <!-- ==================== TO DO'S ==================== -->
+            <Border Grid.Column="2" Background="{StaticResource ColumnBgBrush}" Padding="10,12">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Margin="2,0,2,12">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="To Do's" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" />
+                            <Border Background="{StaticResource AccentBrush}" CornerRadius="9" Padding="7,2" Margin="8,0,0,0"
+                                    VerticalAlignment="Center" ToolTip="Items shown by the current tab">
+                                <TextBlock Text="{Binding Tasks.Count}" Foreground="White" FontSize="11" FontWeight="Bold" />
+                            </Border>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <RadioButton Style="{StaticResource ColumnTab}" GroupName="TaskTabs" Content="Active"
+                                         IsChecked="{Binding TaskFilter, Converter={StaticResource EnumMatch}, ConverterParameter=Active}" />
+                            <RadioButton Style="{StaticResource ColumnTab}" GroupName="TaskTabs" Content="Complete" Margin="14,0,0,0"
+                                         IsChecked="{Binding TaskFilter, Converter={StaticResource EnumMatch}, ConverterParameter=Complete}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Grid.Row="1" Margin="0,0,0,12">
+                        <TextBox x:Name="TaskAddBox" Style="{StaticResource FlatTextBox}"
+                                 Background="{StaticResource AddBarBgBrush}" BorderThickness="0"
+                                 Text="{Binding NewTaskName, UpdateSourceTrigger=PropertyChanged}"
+                                 ToolTip="Name of the new one-off objective — press Enter to add">
+                            <TextBox.InputBindings>
+                                <KeyBinding Key="Enter" Command="{Binding AddTaskCommand}" />
+                            </TextBox.InputBindings>
+                        </TextBox>
+                        <TextBlock Text="Add a To Do" FontSize="13" Foreground="{StaticResource PlaceholderBrush}" Margin="10,0,0,0"
+                                   VerticalAlignment="Center" IsHitTestVisible="False">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding Text, ElementName=TaskAddBox}" Value="" />
+                                                <Condition Binding="{Binding IsKeyboardFocused, ElementName=TaskAddBox}" Value="False" />
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </MultiDataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
+
+                    <Grid Grid.Row="2">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding Tasks}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type vm:ItemViewModel}">
+                                        <Border Style="{StaticResource Card}" Background="{StaticResource CardBgBrush}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="46" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <Button Style="{StaticResource ActionSquare}"
+                                                        Command="{Binding ToggleDoneCommand}"
+                                                        ToolTip="{Binding CheckboxToolTip}">
+                                                    <Button.Background>
+                                                        <MultiBinding Converter="{StaticResource ActionSquareBrush}">
+                                                            <Binding Path="Flag" />
+                                                            <Binding Path="IsDone" />
+                                                            <Binding Path="IsDaily" />
+                                                        </MultiBinding>
+                                                    </Button.Background>
+                                                    <Grid>
+                                                        <Border Width="18" Height="18" CornerRadius="3" Background="#66FFFFFF">
+                                                            <Border.Style>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Border.Style>
+                                                        </Border>
+                                                        <Path Data="M2,7.5 L6,11.5 L14,2.5" Stroke="White" StrokeThickness="2.4"
+                                                              StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                                              Stretch="Uniform" Width="15" Height="13">
+                                                            <Path.Style>
+                                                                <Style TargetType="Path">
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                            <Setter Property="Visibility" Value="Visible" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Path.Style>
+                                                        </Path>
+                                                    </Grid>
+                                                </Button>
+
+                                                <StackPanel Grid.Column="1" Margin="10,9,6,9" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock" BasedOn="{StaticResource CardTitle}">
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                        <Setter Property="TextDecorations" Value="Strikethrough" />
+                                                                        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                    <TextBlock Text="{Binding StatusText}" Style="{StaticResource CardSubtitle}"
+                                                               Foreground="{StaticResource TextSecondaryBrush}" />
+                                                </StackPanel>
+
+                                                <Button Grid.Column="2" Style="{StaticResource GhostIconButton}"
+                                                        Margin="0,0,8,0" Command="{Binding DeleteCommand}"
+                                                        ToolTip="Delete this objective">
+                                                    <Path Data="M3,3 L11,11 M11,3 L3,11"
+                                                          Width="12" Height="12" Stretch="Uniform"
+                                                          Stroke="{StaticResource IconStrokeBrush}" StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                                                </Button>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+
+                        <StackPanel VerticalAlignment="Center" Margin="0,20,0,0">
+                            <StackPanel.Style>
+                                <Style TargetType="StackPanel">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Tasks.Count}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </StackPanel.Style>
+                            <Path Style="{StaticResource EmptyIcon}" Data="M2,2 H14 V14 H2 Z M4.5,8 L7,10.5 L11.5,4.5" />
+                            <TextBlock Text="These are your To Do's" Style="{StaticResource EmptyTitle}" />
+                            <TextBlock Style="{StaticResource EmptyBody}"
+                                       Text="One-off objectives. They complete once, never repeat, and never carry a streak or a missed-day flag." />
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ==================== STATUS ==================== -->
+        <TextBlock Grid.Row="2" Text="{Binding StatusMessage}" Margin="20,10,20,14"
+                   FontSize="12" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" />
+    </Grid>
+</Window>

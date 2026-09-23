@@ -1,0 +1,35 @@
+# Secrets
+.env
+
+# Build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+TestResults/
+
+# Visual Studio / Rider / VS Code
+.vs/
+.idea/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# .NET
+project.lock.json
+*.nupkg
+*.snupkg
+
+# OS noise
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
