@@ -1,3 +1,4 @@
+using HabitTracker.Core.Backup;
 using HabitTracker.Core.Data;
 using HabitTracker.Core.Domain;
 
@@ -180,6 +181,73 @@ public class FakeHabitRepository : IHabitRepository
 
         item.CompletedOn = completed ? Today : null;
         return Task.CompletedTask;
+    }
+
+    public Task<BackupFile> CreateBackupAsync(CancellationToken cancellationToken = default)
+    {
+        Reads++;
+        if (FailReads)
+        {
+            throw new InvalidOperationException(ReadFailure);
+        }
+
+        return Task.FromResult(new BackupFile
+        {
+            ExportedOn = Today,
+            Items = _items
+                .OrderBy(i => i.Kind)
+                .ThenBy(i => i.CreatedOn)
+                .ThenBy(i => i.Id)
+                .Select(i => new BackupItem
+                {
+                    Name = i.Name,
+                    Kind = i.Kind,
+                    CreatedOn = i.CreatedOn,
+                    CompletedOn = i.CompletedOn,
+                    Completions = _dates.TryGetValue(i.Id, out var d)
+                        ? d.OrderBy(x => x).ToList()
+                        : new List<DateOnly>(),
+                })
+                .ToList(),
+        });
+    }
+
+    public Task<ImportResult> ReplaceAllAsync(BackupFile backup, CancellationToken cancellationToken = default)
+    {
+        Writes++;
+        if (FailWrites)
+        {
+            throw new InvalidOperationException(WriteFailure);
+        }
+
+        var problems = backup.Validate(Today);
+        if (problems.Count > 0)
+        {
+            throw new InvalidOperationException(problems[0]);
+        }
+
+        _items.Clear();
+        _dates.Clear();
+
+        var days = 0;
+        foreach (var entry in backup.Items)
+        {
+            // Ids keep increasing rather than restarting, standing in for an auto-increment column
+            // handing the restored rows fresh ones.
+            var item = Seed(
+                new Item
+                {
+                    Name = entry.Name.Trim(),
+                    Kind = entry.Kind,
+                    CreatedOn = entry.CreatedOn,
+                    CompletedOn = entry.Kind == ItemKind.Task ? entry.CompletedOn : null,
+                },
+                entry.Kind == ItemKind.Daily ? entry.Completions.Distinct().ToArray() : Array.Empty<DateOnly>());
+
+            days += _dates[item.Id].Count;
+        }
+
+        return Task.FromResult(new ImportResult(backup.Items.Count, days));
     }
 
     private Item Require(int itemId) =>

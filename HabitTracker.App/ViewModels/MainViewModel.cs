@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using HabitTracker.Core.Backup;
 using HabitTracker.Core.Data;
 using HabitTracker.Core.Domain;
 
@@ -139,6 +141,17 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
+        // Measured after trimming, because a trimmed name is what gets stored, so padding alone must
+        // not push a name over the limit.
+        var length = name.Trim().Length;
+        if (length > Item.NameMaxLength)
+        {
+            // Refused here rather than by the column: MySQL rejects the row with a driver message and
+            // the catch below would echo the whole paste back in the banner.
+            ReportStatus($"That name is {length} characters; the limit is {Item.NameMaxLength}.");
+            return;
+        }
+
         try
         {
             var item = await _repository.AddItemAsync(name, kind);
@@ -155,4 +168,123 @@ public partial class MainViewModel : ObservableObject
     }
 
     private void UpdateTodayText() => TodayText = $"{Utc8Clock.Today:dddd, d MMMM yyyy}  ·  UTC+8";
+
+    /// <summary>
+    /// A backup file that has been read and accepted, paired with what is currently stored so the
+    /// confirmation can name both sides of a replace. Created by <see cref="PreviewImportAsync"/> and
+    /// spent by <see cref="CommitImportAsync"/>.
+    /// </summary>
+    public sealed record ImportPlan(BackupFile Backup, string FileName, int CurrentItems, int CurrentCompletions);
+
+    /// <summary>
+    /// Writes the whole saved state to <paramref name="path"/>. No confirmation and no database
+    /// changes: an export cannot damage the thing it reads.
+    /// </summary>
+    public async Task ExportAsync(string path)
+    {
+        try
+        {
+            var backup = await _repository.CreateBackupAsync();
+            await File.WriteAllTextAsync(path, backup.ToJson());
+
+            var days = backup.Items.Sum(i => i.Completions.Count);
+            ReportStatus(
+                $"Exported {backup.Items.Count} item{(backup.Items.Count == 1 ? "" : "s")} " +
+                $"({days} completed {(days == 1 ? "day" : "days")}) to {Path.GetFileName(path)}.");
+        }
+        catch (Exception ex)
+        {
+            ReportStatus($"Could not write the export: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Reads and checks a backup without writing anything, so the view can ask about a replace before
+    /// anything is lost. Reports its own failure on the banner and returns null.
+    /// </summary>
+    public async Task<ImportPlan?> PreviewImportAsync(string path)
+    {
+        var fileName = Path.GetFileName(path);
+
+        BackupFile backup;
+        IReadOnlyList<string> problems;
+        try
+        {
+            var parsed = BackupFile.TryParse(await File.ReadAllTextAsync(path));
+            if (parsed.Backup is null)
+            {
+                ReportStatus($"Will not import {fileName}: {parsed.Failure}");
+                return null;
+            }
+
+            backup = parsed.Backup;
+
+            // Deliberately inside the try. This runs from an async void click handler and the app has
+            // no DispatcherUnhandledException handler, so an exception raised here would end the
+            // process instead of putting a message on the banner. Validate reports every problem it
+            // knows about as a problem, so reaching this catch means a file shape nobody anticipated.
+            problems = backup.Validate(Utc8Clock.Today);
+        }
+        catch (Exception ex)
+        {
+            ReportStatus($"Could not read {fileName}: {ex.Message}");
+            return null;
+        }
+
+        if (problems.Count > 0)
+        {
+            // Every problem is listed because a file is restored as a whole: fixing one at a time
+            // across re-import attempts would be slower than seeing the rest up front.
+            ReportStatus(problems.Count == 1
+                ? $"Will not import {fileName}: {problems[0]}"
+                : $"Will not import {fileName}: {problems[0]} (and {problems.Count - 1} more problem{(problems.Count - 2 == 0 ? "" : "s")}.)");
+            return null;
+        }
+
+        // Counted from MySQL, not from _allItems: the cache is only as fresh as the last successful
+        // read, so a failed read left the prompt claiming "0 items, 0 completed days" — telling the
+        // user there was nothing to lose while the database still held everything. Refusing beats
+        // asking, because a replace must not be confirmed without knowing what it deletes.
+        int currentItems;
+        int currentCompletions;
+        try
+        {
+            var stored = await _repository.CreateBackupAsync();
+            currentItems = stored.Items.Count;
+            currentCompletions = stored.Items.Sum(i => i.Completions.Count);
+        }
+        catch (Exception ex)
+        {
+            ReportStatus($"Could not check what is stored in MySQL, so nothing was imported: {ex.Message}");
+            return null;
+        }
+
+        return new ImportPlan(backup, fileName, currentItems, currentCompletions);
+    }
+
+    /// <summary>
+    /// Carries out an already-confirmed replace, then re-reads so the lists show what is now stored.
+    /// The repository does the swap in one transaction, so a failure leaves the previous data intact
+    /// and says so.
+    /// </summary>
+    public async Task CommitImportAsync(ImportPlan plan)
+    {
+        try
+        {
+            var result = await _repository.ReplaceAllAsync(plan.Backup);
+            var reloadError = await RefreshAsync();
+
+            ReportStatus(reloadError is null
+                ? $"Imported {result.Items} item{(result.Items == 1 ? "" : "s")} " +
+                  $"({result.Completions} completed {(result.Completions == 1 ? "day" : "days")}) from {plan.FileName}."
+                : $"Imported from {plan.FileName} — but the list did not reload. {reloadError}");
+        }
+        catch (Exception ex)
+        {
+            // Refresh either way: the transaction rolled back, and the window should show the data
+            // that survived rather than whatever was on screen a moment ago.
+            await RefreshAsync();
+            ReportStatus($"Could not import {plan.FileName}, so nothing was changed: {ex.Message}");
+        }
+    }
 }

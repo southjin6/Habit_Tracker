@@ -29,6 +29,25 @@ public class FlagBrushTests
     }
 
     [Fact]
+    public void CardBackgroundAtRisk_IsAmber_NotRed()
+    {
+        // Distinctness alone is not enough on a dark surface: a second, darker red would satisfy
+        // "3 different colours" while reading as the two-day lapse. The card palette separates the
+        // two by cast, not brightness — amber keeps green above blue (#3B3323), red inverts it
+        // (#42282B) and leans further into its own red channel.
+        var onTrack = Rgb(CardBg.Convert(ItemFlag.OnTrack, typeof(Brush), null!, null!));
+        var atRisk = Rgb(CardBg.Convert(ItemFlag.AtRisk, typeof(Brush), null!, null!));
+        var missed = Rgb(CardBg.Convert(ItemFlag.Missed, typeof(Brush), null!, null!));
+
+        Assert.True(atRisk.G > atRisk.B, $"card amber {atRisk} has lost its yellow cast");
+        Assert.True(atRisk.G > missed.G, $"card amber {atRisk} is not greener than card red {missed}");
+        Assert.True(
+            atRisk.R - atRisk.G < missed.R - missed.G,
+            $"card amber {atRisk} is as red-dominant as card red {missed}");
+        Assert.True(Math.Abs((int)onTrack.R - onTrack.G) < 30, $"card neutral {onTrack} should be neutral");
+    }
+
+    [Fact]
     public void AtRisk_IsAmber_NotRed()
     {
         // A single miss breaks the streak but must not look like a two-day lapse: amber keeps a far

@@ -21,7 +21,7 @@ public class HabitDbContext : DbContext
             entity.ToTable("Items");
             entity.HasKey(i => i.Id);
 
-            entity.Property(i => i.Name).IsRequired().HasMaxLength(255);
+            entity.Property(i => i.Name).IsRequired().HasMaxLength(Item.NameMaxLength);
             entity.Property(i => i.Kind).HasConversion<byte>();
             entity.Property(i => i.CreatedOn).HasColumnType("date");
             entity.Property(i => i.CompletedOn).HasColumnType("date");

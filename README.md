@@ -94,7 +94,7 @@ Deriving instead of storing gives three things for free:
 
 The calculator is a pure function: it takes the completion set, the creation day and `today`, and
 returns a result. It touches no database and no clock, which is why the 29 Core tests run in about
-50 milliseconds — and why the repository layer can be replaced by an in-memory fake for the 30
+50 milliseconds — and why the repository layer can be replaced by an in-memory fake for the 77
 view-model and brush tests without either group needing MySQL.
 
 ---
@@ -130,13 +130,61 @@ A task's completion lives on its own `Items` row as `CompletedOn`; tasks never g
 
 ---
 
+## Backup and restore
+
+**Export** and **Import** are the first two controls in the header, at the top left of the window.
+
+Export writes the entire saved state — every item, its creation day, and every completed day — to a
+JSON file you choose. Import reads one back and **replaces everything currently stored**, after
+showing how many items and completed days are on each side. Nothing is merged and there is no undo,
+so export the current state before importing something you might want to compare against.
+
+```json
+{
+  "app": "Habit Tracker",
+  "version": 1,
+  "exportedOn": "2026-09-24",
+  "items": [
+    { "name": "Meditate", "kind": "Daily", "createdOn": "2026-09-19",
+      "completions": ["2026-09-21", "2026-09-22", "2026-09-23"] },
+    { "name": "Renew passport", "kind": "Task", "createdOn": "2026-09-01",
+      "completedOn": "2026-09-05" }
+  ]
+}
+```
+
+Dates are plain UTC+8 calendar days and `kind` is spelled out, so the file is readable and safe to
+edit by hand. Ids are deliberately absent: they belong to whichever database wrote them, so a
+restored item always takes a fresh one. Because streaks are derived rather than stored, a restored
+daily shows its real streak the moment it is read — the file only has to carry the days.
+
+A file is importable in full or not at all. Import refuses, and changes nothing, when the `app`
+marker or `version` is missing or unknown, when the JSON is malformed, when an entry in `items` is
+empty, or when any item has no name, an unknown kind, a date in the future, a completion earlier than
+the day the item was created, or a task carrying daily completions.
+
+That strictness applies to each item's keys as well as to their values. A member name the format does
+not define is refused rather than skipped, and so is an item that leaves out `name`, `kind` or
+`createdOn`. Both would otherwise fall back to a C# default and restore an item that looks plausible:
+a misspelt `"knd"`, or a dropped `kind`, would quietly turn a task into a daily with no history. Case
+is not a problem — `"Name"`, `"name"` and `"NAME"` are the same key — so a file re-serialised by
+another tool still imports, and a `null` day list reads as an empty one, exactly as leaving
+`completions` out does.
+
+Every problem is named at once, because the file is usually repaired with one edit rather than
+several attempts. The swap itself is a single MySQL transaction, so a failure halfway through leaves
+the previous data where it was.
+
+---
+
 ## Project layout
 
 ```
 HabitTracker.sln
 ├─ HabitTracker.Core    net8.0 class library
 │  ├─ Domain/           Item, Completion, ItemKind, ItemFlag, Utc8Clock, StreakCalculator
-│  └─ Data/             HabitDbContext, HabitRepository, EnvLoader, DbContextFactory
+│  ├─ Data/             HabitDbContext, HabitRepository, EnvLoader, DbContextFactory
+│  └─ Backup/           BackupFile — the JSON export format, its parser and its validation
 ├─ HabitTracker.App     net8.0-windows WPF
 │  ├─ ViewModels/       MainViewModel, ItemViewModel, HistoryViewModel, column filters
 │  ├─ Views/            MainWindow, HistoryDialog
@@ -185,7 +233,11 @@ cp .env.example .env
 Then edit `.env` so the password is the same value you put in `setup.sql`. `.env` is gitignored. The app
 and the EF tooling both read the same `HABIT_CONNECTION` value, and both search upward from their
 own directory to find `.env`, so it works whether you launch via `dotnet run` or by
-double-clicking the exe.
+double-clicking the exe. The search stops at the nearest `.env` that actually sets
+`HABIT_CONNECTION`, so an unrelated `.env` in a subfolder is stepped over rather than mistaken for
+yours. A `HABIT_CONNECTION` already present in the environment wins over any file, which is what
+lets a script point a single run at another database — and means a stale exported value will shadow
+the file.
 
 **3. Build and run**
 
@@ -195,7 +247,7 @@ dotnet run --project HabitTracker.App
 ```
 
 Migrations are applied automatically on startup, so the tables are created the first time the app
-connects. `dotnet-ef` 8.0.11 is pinned in the local tool manifest, so to apply them by hand instead:
+connects. `dotnet-ef` 8.0.13 is pinned in the local tool manifest, so to apply them by hand instead:
 
 ```bash
 dotnet tool restore
@@ -208,19 +260,25 @@ dotnet ef database update --project HabitTracker.Core
 dotnet test
 ```
 
-59 tests across the two projects. `HabitTracker.Tests` (Core only, `net8.0`) covers each acceptance
+106 tests across the two projects. `HabitTracker.Tests` (Core only, `net8.0`) covers each acceptance
 criterion: streak breaks on one missed day, red only at two, the morning-open case, the creation-day
 boundary, backdating repairing and then recomputing down, and the UTC+8 midnight boundary.
 `HabitTracker.App.Tests` (`net8.0-windows`) covers what lives in the WPF layer: the status banner
 (an error from an offline database must not outlive the outage; a failed reload after adding or
-toggling must be reported rather than a clean success), the per-item flags and wording, tasks never
-going red regardless of age, and the amber-versus-red brush values themselves.
+toggling must be reported rather than a clean success), the same rule inside the History dialog —
+including an outage while it is loading, which used to end the process — the per-item flags and
+wording, tasks never going red regardless of age, the amber-versus-red brush values themselves, and
+export/import — the round trip through a real file, and every rejection listed above proving that a
+refused file leaves the stored data untouched.
 
 Each of those tests was checked by mutation — reintroducing the original bug makes exactly the
 matching tests fail, so the suite is known to be capable of failing rather than merely green.
 
-Two flows stay outside automated coverage because they open a modal that no test host can click:
-the delete confirmation and the History dialog's backdate buttons. They need a manual pass.
+Four flows stay outside automated coverage because they open a modal no test host can click: the
+delete confirmation, the History dialog, and the two file pickers plus the import confirmation. Those
+dialogs only pick a path, pick a date and answer yes or no — the work behind them runs through the
+History view model's load and mutate methods, and through `ExportAsync`, `PreviewImportAsync` and
+`CommitImportAsync`, all of which the tests drive directly.
 
 ---
 

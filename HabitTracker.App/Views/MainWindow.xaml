@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:HabitTracker.App.ViewModels"
+        xmlns:domain="clr-namespace:HabitTracker.Core.Domain;assembly=HabitTracker.Core"
         Title="Habit Tracker"
         Height="700" Width="1100"
         WindowStartupLocation="CenterScreen"
@@ -34,7 +35,12 @@
             </Grid.ColumnDefinitions>
 
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <TextBlock Text="Habit Tracker" FontSize="20" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" />
+                <Button Style="{StaticResource PillButton}" Content="Export" VerticalAlignment="Center"
+                        Click="OnExportClick" ToolTip="Save every item and completion day to a JSON file" />
+                <Button Style="{StaticResource PillButton}" Content="Import" Margin="8,0,0,0" VerticalAlignment="Center"
+                        Click="OnImportClick" ToolTip="Replace everything with the contents of a JSON backup" />
+                <TextBlock Text="Habit Tracker" FontSize="20" FontWeight="Bold" Margin="16,0,0,0"
+                           VerticalAlignment="Center" Foreground="{StaticResource TextPrimaryBrush}" />
                 <TextBlock Text="{Binding TodayText}" FontSize="12" Foreground="{StaticResource TextMutedBrush}"
                            Margin="12,0,0,0" VerticalAlignment="Center" />
             </StackPanel>
@@ -105,6 +111,7 @@
                     <Grid Grid.Row="1" Margin="0,0,0,12">
                         <TextBox x:Name="DailyAddBox" Style="{StaticResource FlatTextBox}"
                                  Background="{StaticResource AddBarBgBrush}" BorderThickness="0"
+                                 MaxLength="{x:Static domain:Item.NameMaxLength}"
                                  Text="{Binding NewDailyName, UpdateSourceTrigger=PropertyChanged}"
                                  ToolTip="Name of the new daily habit — press Enter to add">
                             <TextBox.InputBindings>
@@ -272,6 +279,7 @@
                     <Grid Grid.Row="1" Margin="0,0,0,12">
                         <TextBox x:Name="TaskAddBox" Style="{StaticResource FlatTextBox}"
                                  Background="{StaticResource AddBarBgBrush}" BorderThickness="0"
+                                 MaxLength="{x:Static domain:Item.NameMaxLength}"
                                  Text="{Binding NewTaskName, UpdateSourceTrigger=PropertyChanged}"
                                  ToolTip="Name of the new one-off objective — press Enter to add">
                             <TextBox.InputBindings>

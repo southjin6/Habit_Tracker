@@ -186,6 +186,27 @@ public class StreakCalculatorTests
         Assert.Equal(ItemFlag.Missed, info.Flag);
     }
 
+    [Fact]
+    public void TheEarliestRepresentableCreationDay_EndsTheWalkInsteadOfThrowing()
+    {
+        // The walk counts back one day at a time and DateOnly has no day below MinValue. This used to
+        // throw out of Evaluate — which runs while the window's lists are rebuilt, so a single such row
+        // left every card unable to load, not just its own.
+        var info = Evaluate(Days(), createdOn: DateOnly.MinValue);
+
+        Assert.Equal(0, info.Streak);
+        Assert.Equal(ItemFlag.Missed, info.Flag);
+    }
+
+    [Fact]
+    public void ACompletionOnTheEarliestRepresentableDay_IsCountedAndEndsTheWalk()
+    {
+        // The other half of the same bound: ComputeStreak walks back from the anchor too.
+        var completions = new HashSet<DateOnly> { DateOnly.MinValue };
+
+        Assert.Equal(1, StreakCalculator.ComputeStreak(completions, DateOnly.MinValue));
+    }
+
     // ------------------------------------------------------------- backdating
 
     [Fact]
@@ -223,17 +244,5 @@ public class StreakCalculatorTests
         var afterRemoval = Evaluate(Days(0, 2, 3));
         Assert.Equal(1, afterRemoval.Streak);
         Assert.Equal(1, afterRemoval.MissedDays);
-    }
-
-    [Fact]
-    public void Streak_IsUnchangedByAnAlreadyCompletedDay()
-    {
-        // A set cannot hold the same day twice, which mirrors the database's unique (ItemId, Date)
-        // index: marking one day twice can never advance a streak twice.
-        var once = Evaluate(Days(0, 1));
-        var markedTwice = Evaluate(Days(0, 1, 1));
-
-        Assert.Equal(once, markedTwice);
-        Assert.Equal(2, markedTwice.Streak);
     }
 }

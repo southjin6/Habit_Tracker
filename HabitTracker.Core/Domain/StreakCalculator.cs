@@ -46,6 +46,13 @@ public static class StreakCalculator
         for (var day = anchor.Value; completions.Contains(day); day = day.AddDays(-1))
         {
             streak++;
+
+            // DateOnly cannot represent the day before MinValue, so the walk stops there rather than
+            // throwing on the step after it.
+            if (day == DateOnly.MinValue)
+            {
+                break;
+            }
         }
 
         return streak;
@@ -69,6 +76,13 @@ public static class StreakCalculator
              day = day.AddDays(-1))
         {
             missed++;
+
+            // Same bound as the streak walk: a createdOn of MinValue leaves no representable day
+            // below the one being examined, so the step after it would throw instead of ending the walk.
+            if (day == DateOnly.MinValue)
+            {
+                break;
+            }
         }
 
         return missed;

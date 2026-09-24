@@ -4,6 +4,13 @@ public class Item
 {
     public int Id { get; set; }
 
+    /// <summary>
+    /// The <c>Name</c> column's width, named once so the schema, the import validator and the add bar
+    /// cannot disagree about it. MySQL refuses a longer name rather than truncating it, so every path
+    /// that writes one has to refuse it first.
+    /// </summary>
+    public const int NameMaxLength = 255;
+
     public string Name { get; set; } = string.Empty;
 
     public ItemKind Kind { get; set; }

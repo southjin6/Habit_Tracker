@@ -1,4 +1,5 @@
 using HabitTracker.App.ViewModels;
+using HabitTracker.Core.Domain;
 
 namespace HabitTracker.App.Tests;
 
@@ -88,6 +89,42 @@ public class StatusBannerTests
 
         Assert.Equal("Enter a name first.", vm.StatusMessage);
         Assert.Equal(0, repo.Writes);
+    }
+
+    [Fact]
+    public async Task AddDaily_WithANameLongerThanTheColumn_IsRefusedBeforeTheWrite()
+    {
+        var (repo, vm) = Setup();
+        vm.NewDailyName = new string('x', Item.NameMaxLength + 1);
+
+        await vm.AddDailyCommand.ExecuteAsync(null);
+
+        // The import path has always refused this shape; the add path used to send it to MySQL, which
+        // names the column in a driver message and has the catch echo the entire paste into the banner.
+        Assert.Equal(
+            $"That name is {Item.NameMaxLength + 1} characters; the limit is {Item.NameMaxLength}.",
+            vm.StatusMessage);
+        Assert.Equal(0, repo.Writes);
+        Assert.Empty(vm.Dailies);
+
+        // Nothing is cleared on a refusal, so the text is still there to be shortened.
+        Assert.Equal(new string('x', Item.NameMaxLength + 1), vm.NewDailyName);
+    }
+
+    [Fact]
+    public async Task AddDaily_WithAnExactlyFullLengthName_IsAccepted()
+    {
+        var (repo, vm) = Setup();
+        var name = new string('x', Item.NameMaxLength);
+        vm.NewDailyName = $"  {name}  ";
+
+        await vm.AddDailyCommand.ExecuteAsync(null);
+
+        // The length is measured after trimming because the trimmed name is what gets stored, so
+        // padding alone must not read as over the limit.
+        Assert.Equal($"Added \"{name}\".", vm.StatusMessage);
+        Assert.Equal(1, repo.Writes);
+        Assert.Single(vm.Dailies);
     }
 
     [Fact]

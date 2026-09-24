@@ -35,17 +35,38 @@ public partial class HistoryViewModel : ObservableObject
     [ObservableProperty] private DateTime? _selectedDate;
     [ObservableProperty] private string _statusMessage = string.Empty;
 
-    public async Task LoadAsync()
+    /// <summary>
+    /// Re-reads the recorded days. Returns <c>null</c> when the list on screen is what MySQL holds,
+    /// otherwise the banner text it has just written — the same contract as
+    /// <see cref="MainViewModel.RefreshAsync"/>, so a caller can tell a failed reload from a
+    /// successful one instead of reporting a clean success over a stale list.
+    ///
+    /// Never throws. The dialog calls this from its Loaded handler, which is <c>async void</c> on the
+    /// dispatcher and has no <c>DispatcherUnhandledException</c> handler above it, so an exception
+    /// here would end the process instead of putting a message on the banner.
+    /// </summary>
+    public async Task<string?> LoadAsync()
     {
-        var allDates = await _repository.GetCompletionDatesAsync();
-        var dates = allDates.TryGetValue(_item.Id, out var found)
-            ? found
-            : new HashSet<DateOnly>();
-
-        Entries.Clear();
-        foreach (var date in dates.OrderByDescending(d => d))
+        try
         {
-            Entries.Add(date);
+            var allDates = await _repository.GetCompletionDatesAsync();
+            var dates = allDates.TryGetValue(_item.Id, out var found)
+                ? found
+                : new HashSet<DateOnly>();
+
+            Entries.Clear();
+            foreach (var date in dates.OrderByDescending(d => d))
+            {
+                Entries.Add(date);
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            // Whatever is already listed stays: those are the last days MySQL was known to hold, and
+            // clearing them would turn an outage into "this habit has no history".
+            return StatusMessage = $"Could not load the history: {ex.Message}";
         }
     }
 
@@ -79,15 +100,22 @@ public partial class HistoryViewModel : ObservableObject
             {
                 await _repository.UnmarkDailyCompleteAsync(_item.Id, date);
             }
-
-            await LoadAsync();
-            StatusMessage = markComplete
-                ? $"{date:yyyy-MM-dd} recorded — streak recomputed."
-                : $"{date:yyyy-MM-dd} removed — streak recomputed.";
         }
         catch (Exception ex)
         {
             StatusMessage = ex.Message;
+            return;
         }
+
+        var done = markComplete
+            ? $"{date:yyyy-MM-dd} recorded — streak recomputed"
+            : $"{date:yyyy-MM-dd} removed — streak recomputed";
+
+        // The write landed, so a bare error would be a lie; the list on screen is stale, so a bare
+        // success would be one too. Both facts go in the sentence.
+        var reloadProblem = await LoadAsync();
+        StatusMessage = reloadProblem is null
+            ? $"{done}."
+            : $"{done}, but the list did not reload. {reloadProblem}";
     }
 }

@@ -25,24 +25,10 @@ public partial class App : Application
         services.AddSingleton<MainWindow>();
         _services = services.BuildServiceProvider();
 
-        var database = _services.GetRequiredService<IDbContextFactory<HabitDbContext>>();
-
-        try
+        var problem = DatabaseStartup.PrepareDatabase(_services);
+        if (problem is not null)
         {
-            // Brings the schema up to date on launch, so a fresh clone needs no manual ef command.
-            using var db = database.CreateDbContext();
-            db.Database.Migrate();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(
-                "Habit Tracker could not reach MySQL, or its migrations failed to apply." +
-                Environment.NewLine + Environment.NewLine +
-                "Check that the MySQL service is running and that .env has valid credentials." +
-                Environment.NewLine + Environment.NewLine + ex.Message,
-                "Habit Tracker",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            MessageBox.Show(problem, "Habit Tracker", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(-1);
             return;
         }
